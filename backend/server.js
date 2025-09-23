@@ -11,7 +11,7 @@ app.use(cors({
   origin: [
     "http://localhost:5173",          // Vite dev
     "http://localhost:3000",          // CRA dev
-    "https://sharp-tools.netlify.app/" // deployed frontend
+    "https://sharp-tools.netlify.app" // deployed frontend
   ],
   methods: ["GET", "POST"],
 }));
@@ -55,4 +55,6 @@ app.post("/split", upload.single("file"), async (req, res) => {
 
 // ✅ Render provides PORT dynamically
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`✅ Server running at http://localhost:${PORT}`));
+app.listen(PORT, () =>
+  console.log(`✅ Server running at http://localhost:${PORT}`)
+);
