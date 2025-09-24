@@ -55,11 +55,11 @@ const App: React.FC = () => {
 
             {/* PDF tools */}
             <Route
-              path="/tools/pdf/split"
+              path="/tools/pdf/pdfsplit"
               element={<PdfSplit darkMode={darkMode} />}
             />
             <Route
-              path="/tools/pdf/from-images"
+              path="/tools/pdf/imgtopdf"
               element={<ImgToPdf darkMode={darkMode} />}
             />
           </Routes>
