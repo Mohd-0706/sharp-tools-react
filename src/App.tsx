@@ -59,7 +59,7 @@ const App: React.FC = () => {
               element={<PdfSplit darkMode={darkMode} />}
             />
             <Route
-              path="/tools/pdf/imgtopdf"
+              path="/tools/pdf/from-images"
               element={<ImgToPdf darkMode={darkMode} />}
             />
           </Routes>
