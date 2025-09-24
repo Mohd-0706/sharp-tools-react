@@ -15,7 +15,7 @@ const Header: React.FC<HeaderProps> = ({ darkMode, setDarkMode, activeSection, s
     { name: 'Home', id: 'home' },
     { name: 'PDF Tools', id: 'pdf-tools' },
     { name: 'Image Tools', id: 'image-tools' },
-    { name: 'About', id: 'about' },
+
   ];
 
   const scrollToSection = (sectionId: string) => {
