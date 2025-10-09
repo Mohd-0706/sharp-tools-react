@@ -10,16 +10,16 @@ interface PDFToolsProps {
 const PDFTools: React.FC<PDFToolsProps> = ({ darkMode }) => {
   const navigate = useNavigate();
 
-  // Define tool routes/URLs
+  // Define tool routes/URLs - make sure these match your App.tsx routes
   const toolRoutes: Record<string, string> = {
-    'PdfSplit': '/tools/pdf/pdfsplit',
+    'PdfSplit': '/tools/pdf/split',
     'Merge PDF': '/tools/pdf/merge',
     'Compress PDF': '/tools/pdf/compress',
     'Protect PDF': '/tools/pdf/protect',
     'Unlock PDF': '/tools/pdf/unlock',
     'Rotate PDF': '/tools/pdf/rotate',
-    'PDF to Images': '/tools/pdf/to-images',
-    'Images to PDF': '/tools/pdf/from-images',
+    'PDF to Images': '/tools/pdf/pdftoimg', // Fixed this route
+    'Images to PDF': '/tools/pdf/from-images', // This matches your App.tsx
     'Edit PDF': '/tools/pdf/edit',
     'Extract Text': '/tools/pdf/extract-text',
     'Add Bookmarks': '/tools/pdf/bookmarks',
@@ -98,7 +98,13 @@ const PDFTools: React.FC<PDFToolsProps> = ({ darkMode }) => {
       navigate(route);
     } else {
       console.warn(`No route defined for tool: ${toolTitle}`);
+      // Fallback to home or show error
+      showFallbackMessage(toolTitle);
     }
+  };
+
+  const showFallbackMessage = (toolTitle: string) => {
+    alert(`${toolTitle} is coming soon! This feature is currently under development.`);
   };
 
   return (
