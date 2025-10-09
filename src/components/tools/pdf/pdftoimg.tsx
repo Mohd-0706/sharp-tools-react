@@ -5,54 +5,11 @@ import {
   Download, 
   RotateCw, 
   CheckSquare, 
-  ArrowLeft, 
-  ArrowUp,
-  Moon,
-  Sun,
+  ArrowLeft,
   FileText,
   Home,
-  Scissors,
   Image as ImageIcon
 } from "lucide-react";
-
-// PDF.js types
-declare global {
-  namespace pdfjsLib {
-    interface PDFDocumentProxy {
-      numPages: number;
-      getPage(pageNumber: number): Promise<PDFPageProxy>;
-    }
-
-    interface PDFPageProxy {
-      getViewport(options: { scale: number }): PDFPageViewport;
-      render(options: PDFRenderParams): PDFRenderTask;
-    }
-
-    interface PDFPageViewport {
-      width: number;
-      height: number;
-    }
-
-    interface PDFRenderParams {
-      canvasContext: CanvasRenderingContext2D;
-      viewport: PDFPageViewport;
-    }
-
-    interface PDFRenderTask {
-      promise: Promise<void>;
-    }
-
-    function getDocument(data: { data: Uint8Array }): PDFLoadingTask;
-    
-    interface PDFLoadingTask {
-      promise: Promise<PDFDocumentProxy>;
-    }
-
-    const GlobalWorkerOptions: {
-      workerSrc: string;
-    };
-  }
-}
 
 interface PDFImage {
   name: string;
@@ -70,12 +27,6 @@ const PdfToImages: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
   const [statusMessage, setStatusMessage] = useState<{ text: string; type: 'success' | 'error' | 'info' } | null>(null);
   const [showPreview, setShowPreview] = useState(false);
   const [fileName, setFileName] = useState<string>('');
-
-  // Set PDF.js worker path
-  useEffect(() => {
-    const pdfjs = require('pdfjs-dist');
-    pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
-  }, []);
 
   const showStatusMessage = (text: string, type: 'success' | 'error' | 'info') => {
     setStatusMessage({ text, type });
@@ -129,12 +80,14 @@ const PdfToImages: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
       setShowPreview(false);
       setFileName(file.name);
 
+      const pdfjs = await import('pdfjs-dist');
+      pdfjs.GlobalWorkerOptions.workerSrc = `//cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js`;
+
       const reader = new FileReader();
       
       reader.onload = async (e) => {
         try {
           const typedArray = new Uint8Array(e.target?.result as ArrayBuffer);
-          const pdfjs = await import('pdfjs-dist');
           
           const pdf = await pdfjs.getDocument({ data: typedArray }).promise;
           setProgress(20);
@@ -143,7 +96,7 @@ const PdfToImages: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
           
           for (let i = 1; i <= pdf.numPages; i++) {
             const page = await pdf.getPage(i);
-            const viewport = page.getViewport({ scale: 1.5 });
+            const viewport = page.getViewport({ scale: 2.0 }); // Increased scale for better quality
             
             const canvas = document.createElement('canvas');
             const context = canvas.getContext('2d');
@@ -154,12 +107,12 @@ const PdfToImages: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
             
             await page.render({
               canvasContext: context,
-              viewport: viewport,
-              canvas: canvas
+              canvas: canvas,
+              viewport: viewport
             }).promise;
             
-            const imageData = canvas.toDataURL('image/jpeg', 0.8);
-            const imageName = `${file.name.replace('.pdf', '')}_page_${i}.jpg`;
+            const imageData = canvas.toDataURL('image/png', 1.0); // Use PNG for better quality
+            const imageName = `${file.name.replace('.pdf', '')}_page_${i}.png`;
             
             images.push({
               name: imageName,
@@ -175,12 +128,12 @@ const PdfToImages: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
             setIsLoading(false);
             setPdfImages(images);
             setShowPreview(true);
-            showStatusMessage('PDF processed successfully!', 'success');
+            showStatusMessage(`Successfully converted ${images.length} pages to images!`, 'success');
           }, 500);
 
         } catch (error) {
           console.error('Error processing PDF:', error);
-          showStatusMessage('Error processing PDF file', 'error');
+          showStatusMessage('Error processing PDF file. Please try another file.', 'error');
           resetLoadingState();
         }
       };
@@ -207,6 +160,7 @@ const PdfToImages: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
+      showStatusMessage(`Downloaded ${image.name}`, 'success');
     } catch (error) {
       console.error('Error downloading image:', error);
       showStatusMessage('Error downloading image', 'error');
@@ -239,13 +193,18 @@ const PdfToImages: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
       const zip = new JSZip();
       const folder = zip.folder('pdf_images');
       
+      if (!folder) {
+        throw new Error('Could not create zip folder');
+      }
+
       selectedImages.forEach(image => {
         const base64Data = image.data.split(',')[1];
-        folder?.file(image.name, base64Data, { base64: true });
+        folder.file(image.name, base64Data, { base64: true });
       });
 
       const content = await zip.generateAsync({ type: 'blob' });
       saveAs(content, 'pdf_images.zip');
+      showStatusMessage(`Downloaded ${selectedImages.length} images as zip`, 'success');
       setIsLoading(false);
     } catch (error) {
       console.error('Error creating zip file:', error);
@@ -264,6 +223,11 @@ const PdfToImages: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
     setPdfImages(prev => {
       const newImages = [...prev];
       newImages[index] = { ...newImages[index], selected: !newImages[index].selected };
+      
+      // Update select all state based on current selection
+      const allSelected = newImages.every(img => img.selected);
+      setIsSelectAll(allSelected);
+      
       return newImages;
     });
   };
@@ -331,7 +295,7 @@ const PdfToImages: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
                 PDF to Images Converter
               </h1>
               <p className={`text-base md:text-lg ${darkMode ? "text-gray-300" : "text-gray-600"}`}>
-                Convert PDF pages to high-quality images instantly in your browser
+                Convert PDF pages to high-quality PNG images instantly in your browser
               </p>
             </div>
 
@@ -353,7 +317,7 @@ const PdfToImages: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
               >
                 <input
                   type="file"
-                  accept="application/pdf"
+                  accept=".pdf,application/pdf"
                   ref={fileInputRef}
                   onChange={handleFileSelect}
                   className="hidden"
@@ -389,12 +353,18 @@ const PdfToImages: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
 
                 {/* Progress Bar */}
                 {isLoading && (
-                  <div className="mt-6 w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
-                    <div 
-                      className="bg-gradient-to-r from-blue-500 to-teal-500 dark:from-blue-400 dark:to-teal-400 h-2 rounded-full relative overflow-hidden transition-all duration-300"
-                      style={{ width: `${progress}%` }}
-                    >
-                      <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shine"></div>
+                  <div className="mt-6 w-full max-w-md mx-auto">
+                    <div className="flex justify-between text-sm mb-2">
+                      <span className={darkMode ? "text-gray-300" : "text-gray-600"}>Converting...</span>
+                      <span className={darkMode ? "text-gray-300" : "text-gray-600"}>{progress}%</span>
+                    </div>
+                    <div className="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2">
+                      <div 
+                        className="bg-gradient-to-r from-blue-500 to-teal-500 dark:from-blue-400 dark:to-teal-400 h-2 rounded-full relative overflow-hidden transition-all duration-300"
+                        style={{ width: `${progress}%` }}
+                      >
+                        <div className="absolute inset-0 bg-gradient-to-r from-transparent via-white/30 to-transparent animate-shine"></div>
+                      </div>
                     </div>
                   </div>
                 )}
@@ -427,30 +397,42 @@ const PdfToImages: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
 
             {/* Preview Section */}
             {showPreview && (
-              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 mb-8">
+              <div className={`rounded-xl shadow-lg p-6 mb-8 ${
+                darkMode ? "bg-gray-700/50" : "bg-white"
+              }`}>
                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                  <h2 className="text-2xl font-semibold text-blue-600 dark:text-blue-400">
+                  <h2 className={`text-2xl font-semibold ${
+                    darkMode ? "text-blue-400" : "text-blue-600"
+                  }`}>
                     PDF Pages Preview ({pdfImages.length} pages)
                   </h2>
                   <div className="preview-actions flex flex-wrap gap-3 w-full sm:w-auto">
                     <button
                       onClick={toggleSelectAll}
-                      className="px-4 py-2 border-2 border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 rounded-lg font-medium flex items-center hover:bg-blue-600/10 dark:hover:bg-blue-400/10 transition-all duration-300"
+                      className={`px-4 py-2 border-2 rounded-lg font-medium flex items-center transition-all duration-300 ${
+                        darkMode 
+                          ? "border-blue-400 text-blue-400 hover:bg-blue-400/10" 
+                          : "border-blue-600 text-blue-600 hover:bg-blue-600/10"
+                      }`}
                     >
                       <CheckSquare className="h-4 w-4 mr-2" />
                       {isSelectAll ? 'Deselect All' : 'Select All'}
                     </button>
                     <button
                       onClick={downloadSelectedImages}
-                      disabled={isLoading}
-                      className="px-4 py-2 bg-gradient-to-r from-blue-600 to-teal-600 dark:from-blue-500 dark:to-teal-500 text-white rounded-lg font-medium flex items-center hover:shadow-lg transition-all duration-300 disabled:opacity-50"
+                      disabled={isLoading || selectedCount === 0}
+                      className="px-4 py-2 bg-gradient-to-r from-blue-600 to-teal-600 dark:from-blue-500 dark:to-teal-500 text-white rounded-lg font-medium flex items-center hover:shadow-lg transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed"
                     >
                       <Download className="h-4 w-4 mr-2" />
                       Download Selected ({selectedCount})
                     </button>
                     <button
                       onClick={resetConverter}
-                      className="px-4 py-2 border-2 border-blue-600 dark:border-blue-400 text-blue-600 dark:text-blue-400 rounded-lg font-medium flex items-center hover:bg-blue-600/10 dark:hover:bg-blue-400/10 transition-all duration-300"
+                      className={`px-4 py-2 border-2 rounded-lg font-medium flex items-center transition-all duration-300 ${
+                        darkMode 
+                          ? "border-gray-400 text-gray-400 hover:bg-gray-400/10" 
+                          : "border-gray-600 text-gray-600 hover:bg-gray-600/10"
+                      }`}
                     >
                       <RotateCw className="h-4 w-4 mr-2" />
                       Reset
@@ -458,17 +440,14 @@ const PdfToImages: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
                   </div>
                 </div>
 
-                {/* Loading Spinner */}
-                {isLoading && (
-                  <div className="w-12 h-12 border-4 border-blue-600/30 border-t-blue-600 border-r-blue-600 rounded-full animate-spin mx-auto my-8"></div>
-                )}
-
                 {/* Thumbnail Grid */}
                 <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4 mt-4">
                   {pdfImages.map((image, index) => (
                     <div
                       key={index}
-                      className="bg-white dark:bg-gray-700 rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-all duration-300"
+                      className={`rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-all duration-300 ${
+                        darkMode ? "bg-gray-600" : "bg-white"
+                      }`}
                     >
                       <div className="relative">
                         <input
@@ -481,10 +460,15 @@ const PdfToImages: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
                           src={image.data}
                           className="w-full h-48 object-contain bg-gray-100 dark:bg-gray-600"
                           alt={`Page ${index + 1}`}
+                          loading="lazy"
                         />
                       </div>
-                      <div className="p-4 border-t border-gray-200 dark:border-gray-600">
-                        <h4 className="font-semibold text-gray-800 dark:text-gray-200 mb-1">
+                      <div className={`p-4 border-t ${
+                        darkMode ? "border-gray-500" : "border-gray-200"
+                      }`}>
+                        <h4 className={`font-semibold mb-1 ${
+                          darkMode ? "text-gray-200" : "text-gray-800"
+                        }`}>
                           Page {index + 1}
                         </h4>
                         <button
@@ -527,7 +511,7 @@ const PdfToImages: React.FC<{ darkMode: boolean }> = ({ darkMode }) => {
                 </div>
                 <h3 className="font-semibold mb-1 text-sm md:text-base">High Quality</h3>
                 <p className={`text-xs md:text-sm ${darkMode ? "text-gray-400" : "text-gray-600"}`}>
-                  Clear image output
+                  Clear PNG output
                 </p>
               </div>
 
